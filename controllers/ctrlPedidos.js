@@ -1,7 +1,8 @@
 const { Op } = require("sequelize");
-const { Pedido, Ruta, PedidoComunidad, Usuario, Comunidad, Municipio } = require("../models");
+const { Pedido, Ruta, PedidoComunidad, Usuario, Comunidad, Municipio, EfectivoPedidos } = require("../models");
 const logger = require("../utils/logger");
-const sequelize = require("../config/database")
+const sequelize = require("../config/database");
+const e = require("express");
 
 // Utility function for error responses
 const sendErrorResponse = (res, statusCode, message) => {
@@ -170,7 +171,20 @@ const getOrder = async (req, res) => {
                         }
                     ],
                     as: "pedidoComunidad"
-                } ]
+                },
+                {
+                    model: EfectivoPedidos,
+                    attributes: ["totalEfectivo", "observaciones", "billetes1000", "billetes500", "billetes200", "billetes100", "billetes50", "billetes20","monedas20", "monedas10", "monedas5", "monedas2", "monedas1", "monedas50C", "createdAt"],
+                    include: [
+                        {
+                            model: Usuario,
+                            attributes: ["username"],
+                            as: "usuario"
+                        }
+                    ],
+                    as: "efectivo"
+                } 
+            ]
         } );
 
         if (!pedido) 
@@ -212,10 +226,9 @@ const updateOrder = async (req, res) => {
     let transaction;
     try {
         const { id } = req.params;
-        const { fechaEntrega, devoluciones, pedidoComunidad, estado, horaLlegada, ...otrosUpdates } = req.body;
+        const { fechaEntrega, devoluciones, pedidoComunidad, estado, horaLlegada, efectivo } = req.body;
         
         if (isNaN(id)) return sendErrorResponse(res, 400, "ID inválido");
-
         transaction = await sequelize.transaction();
 
         // 1. Actualizar pedido principal
@@ -231,19 +244,18 @@ const updateOrder = async (req, res) => {
         if (devoluciones !== undefined) updateFields.devoluciones = devoluciones;
         if (horaLlegada !== undefined) updateFields.horaLlegada = horaLlegada;
         if (estado) updateFields.estado = estado;
-
+        
         await pedido.update(updateFields, { transaction });
 
-        // 2. Manejar pedidoComunidad
+        // 2. Manejar pedidoComunidad (tu lógica existente)
         if (pedidoComunidad) {
             if (!Array.isArray(pedidoComunidad)) {
                 await transaction.rollback();
                 return sendErrorResponse(res, 400, "Formato inválido para pedidoComunidad");
             }
 
-            // Eliminar existentes y crear nuevas
             await PedidoComunidad.destroy({ where: { idPedido: id }, transaction });
-            
+           
             await PedidoComunidad.bulkCreate(
                 pedidoComunidad.map(pc => ({
                     idPedido: id,
@@ -255,20 +267,59 @@ const updateOrder = async (req, res) => {
                     arpilladas: pc.arpilladas || false,
                     observaciones: pc.observaciones || "",
                     comite: pc.comite || 0
-                })), 
+                })),
                 { transaction }
             );
         }
 
-        await transaction.commit(); 
-       
-        return sendSuccessResponse(res, 200, "successfully updated order");
+        // ✅ 3. Guardar efectivo SI el pedido se está finalizando
+        if (efectivo && estado === "finalizado") {
+            // Validar que el total_efectivo sea un número válido
+            const totalEfectivo = parseFloat(efectivo.total_efectivo) || 0;
+            
+            if (totalEfectivo < 0) {
+                await transaction.rollback();
+                return sendErrorResponse(res, 400, "El total de efectivo no puede ser negativo");
+            }
 
+            // Eliminar registro anterior de efectivo si existe (por si re-finalizan)
+            await EfectivoPedidos.destroy({ 
+                where: { idPedido: id }, 
+                transaction 
+            });
+
+            // Crear nuevo registro de efectivo
+            await EfectivoPedidos.create({
+                idPedido: id,
+                idUsuario: req.user.id, // Del token JWT
+                billetes1000: parseInt(efectivo.billetes1000) || 0,
+                billetes500: parseInt(efectivo.billetes500) || 0,
+                billetes200: parseInt(efectivo.billetes200) || 0,
+                billetes100: parseInt(efectivo.billetes100) || 0,
+                billetes50: parseInt(efectivo.billetes50) || 0,
+                billetes20: parseInt(efectivo.billetes20) || 0,
+                monedas20: parseInt(efectivo.monedas20) || 0,
+                monedas10: parseInt(efectivo.monedas10) || 0,
+                monedas5: parseInt(efectivo.monedas5) || 0,
+                monedas2: parseInt(efectivo.monedas2) || 0,
+                monedas1: parseInt(efectivo.monedas1) || 0,
+                monedas50C: parseInt(efectivo.monedas50C) || 0,
+                totalEfectivo: totalEfectivo,
+                observaciones: efectivo.observaciones || null,
+                tipoRegistro: "entrega"
+            }, { transaction });
+
+            logger.info(`Efectivo registrado para pedido ${id}: $${totalEfectivo}`);
+        }
+
+        await transaction.commit();
+    
+        logger.info(`Pedido ${id} actualizado correctamente`);
+        return sendSuccessResponse(res, 200, "Successfully updated order");        
     } catch (e) {
-        // Verificar si la transacción sigue activa
-        if (transaction && !transaction.finished) 
+        if (transaction && !transaction.finished)
             await transaction.rollback();
-        
+       
         logger.error(`Error actualizando pedido: ${e.message}`);
         return sendErrorResponse(res, 500, "Error interno del servidor");
     }
