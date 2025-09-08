@@ -9,6 +9,7 @@ const Usuario = require("./usuario");
 const Municipio = require("./municipio");
 const Tickets = require("./tickets");
 const Cobranza = require("./cobranzas");
+const EfectivoPedidos = require("./efectivoPedidos");
 
 // Define relationships
 
@@ -48,6 +49,15 @@ Cobranza.belongsTo(Pedido, { foreignKey: "idPedido", as: "pedido" });
 Usuario.hasMany(Cobranza, { foreignKey: "generadoPor", as: "cobranzasGeneradas" });
 Cobranza.belongsTo(Usuario, { foreignKey: "generadoPor", as: "usuario" });
 
+// Relaciones para EfectivoPedidos
+// Pedido tiene muchos registros de efectivo
+Pedido.hasMany(EfectivoPedidos, { foreignKey: "idPedido", as: "efectivo" });
+EfectivoPedidos.belongsTo(Pedido, { foreignKey: "idPedido", as: "pedido" });
+
+// Usuario registra muchos efectivos de pedidos
+Usuario.hasMany(EfectivoPedidos, { foreignKey: "idUsuario", as: "efectivosRegistrados" });
+EfectivoPedidos.belongsTo(Usuario, { foreignKey: "idUsuario", as: "usuario" });
+
 // Export models
 module.exports = {
     sequelize,
@@ -58,5 +68,6 @@ module.exports = {
     PedidoComunidad,
     Municipio,
     Tickets,
-    Cobranza
+    Cobranza,
+    EfectivoPedidos
 };
