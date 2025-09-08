@@ -114,7 +114,7 @@ CREATE TABLE cobranzas (
     INDEX idx_cobranzas_pedido (idPedido)
 );
 
-CREATE TABLE efectivo_pedidos (
+CREATE TABLE efectivoPedidos (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     idPedido BIGINT NOT NULL,
     idUsuario INT NOT NULL, -- Quién registra (Ts)
@@ -133,6 +133,7 @@ CREATE TABLE efectivo_pedidos (
     monedas5 INT DEFAULT 0,
     monedas2 INT DEFAULT 0,
     monedas1 INT DEFAULT 0,
+    monedas50C INT DEFAULT 0,
     
     -- Campos calculados/extras
     totalEfectivo DECIMAL(10, 2) NOT NULL,
@@ -143,7 +144,7 @@ CREATE TABLE efectivo_pedidos (
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
     FOREIGN KEY (idPedido) REFERENCES pedidos(id) ON DELETE CASCADE,
-    FOREIGN KEY (idUsuario) REFERENCES usuarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (idUsuario) REFERENCES usuarios(id) ON DELETE CASCADE,
     
     INDEX idx_efectivo_pedido (idPedido),
     INDEX idx_efectivo_usuario (idUsuario)
