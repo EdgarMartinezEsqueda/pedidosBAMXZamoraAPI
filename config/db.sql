@@ -101,6 +101,7 @@ CREATE TABLE tickets (
     INDEX idx_tickets_idUsuario (idUsuario) -- ¡Corregido el typo "idUsario"!
 );
 
+-- Tabla para el sistema de generar cobranza (esta tabla se usará cuando se implemente el sistema de guardar en el Drive)
 CREATE TABLE cobranzas (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     idPedido BIGINT NOT NULL,
@@ -114,6 +115,7 @@ CREATE TABLE cobranzas (
     INDEX idx_cobranzas_pedido (idPedido)
 );
 
+-- Tabla para almacenar los datos del efectivo traido por el TS de la ruta
 CREATE TABLE efectivoPedidos (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     idPedido BIGINT NOT NULL,
