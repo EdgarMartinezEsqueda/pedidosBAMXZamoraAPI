@@ -1,0 +1,36 @@
+name: Deploy Backend to VPS
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Deploy to VPS
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: 22
+        script: |
+          export NVM_DIR="/root/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          nvm use v22.19.0
+          
+          cd ${{ secrets.ROUTE }}
+          echo "=== Backend deployment en: $(pwd) ==="
+          
+          git pull
+          npm install
+          
+          # Para backend no hay build, sino start/production
+          # npm run production  # o el comando que uses
+          
+          # Reiniciar la aplicación con PM2
+          pm2 restart ${{ secrets.PM2_APP_NAME }}
+          echo "=== Backend desplegado ==="
