@@ -61,7 +61,7 @@ module.exports = async (pedido, datosAdicionales) => {
 // HEADER
 function buildHeader(pedido) {
     return [
-      { text: "BANCO DIOCESANO DE ALIMENTOS DE LOS ALTOS A.C.", style: "header" },
+      { text: "BANCO DE ALIMENTO DE ZAMORA A.C.", style: "header" },
       { text: "RECIBO CUOTA DE RECUPERACIÓN", style: "title" },
       {
         table: {

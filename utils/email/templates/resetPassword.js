@@ -7,7 +7,7 @@ const generatePasswordResetTemplate = (token) =>  {
             <!-- Encabezado -->
             <tr>
                 <td colspan="4" valign="top" class="image-section" style="border-collapse: collapse;border: 0;margin: 0;padding: 0;-webkit-text-size-adjust: none;color: #555559;font-family: Arial, sans-serif;font-size: 16px;line-height: 26px;background-color: #fff;border-bottom: 4px solid #0a8e3d; text-align: center;">
-                <a href="https://bamxtepatitlan.org"><img class="top-image" src="https://bamxtepatitlan.org/assets/logo-B5cTjWox.png" style="width: 100px; margin:20px auto; display: block;" alt="BAMX Tepatitlán logo"></a>
+                <a href="https://bamxzamora.org"><img class="top-image" src="https://bamxzamora.org/assets/images/logo.png" style="width: 100px; margin:20px auto; display: block;" alt="BAMX Tepatitlán logo"></a>
                 </td>
             </tr>
 
@@ -27,7 +27,7 @@ const generatePasswordResetTemplate = (token) =>  {
                     </tr>
                     <tr>
                     <td style="padding: 25px 0; text-align: center;">
-                        <a href="https://pedidos.bamxtepatitlan.org/resetPassword/${token}" 
+                        <a href="https://pedidos.bamxzamora.org/resetPassword/${token}" 
                         style="background-color: #ff8300; color: #ffffff; padding: 12px 30px; 
                                 text-decoration: none; border-radius: 4px; display: inline-block;
                                 font-weight: bold; font-size: 16px;">
@@ -49,24 +49,29 @@ const generatePasswordResetTemplate = (token) =>  {
                         <table style="margin: 0 auto;">
                         <tr>
                             <td style="padding: 0 8px;">
-                            <a href="https://www.facebook.com/bamxtepatitlan">
-                                <img src="https://cdn3.iconfinder.com/data/icons/social-media-black-white-2/512/BW_Facebook_glyph_svg-32.png" alt="Facebook">
-                            </a>
+                                <a href="https://www.facebook.com/profile.php?id=100068378567561">
+                                    <img src="https://cdn3.iconfinder.com/data/icons/social-media-black-white-2/512/BW_Facebook_glyph_svg-32.png" alt="Facebook">
+                                </a>
                             </td>
                             <td style="padding: 0 8px;">
-                            <a href="https://www.linkedin.com/company/bamxtepatitlan">
-                                <img src="https://cdn1.iconfinder.com/data/icons/social-media-circle-7/512/Circled_Linkedin_svg-32.png" alt="LinkedIn">
-                            </a>
+                                <a href="https://www.instagram.com/bazac_">
+                                    <img src="https://cdn1.iconfinder.com/data/icons/social-media-circle-7/512/Circled_Instagram_svg-32.png" alt="Instagram">
+                                </a>
                             </td>
                             <td style="padding: 0 8px;">
-                            <a href="https://www.instagram.com/bamxtepatitlan">
-                                <img src="https://cdn1.iconfinder.com/data/icons/social-media-circle-7/512/Circled_Instagram_svg-32.png" alt="Instagram">
-                            </a>
+                                <a href="https://www.youtube.com/@BancodeAlimentosdeZamora">
+                                    <img src="https://cdn3.iconfinder.com/data/icons/social-media-black-white-2/512/BW_Youtube_glyph_svg-32.png" alt="Canal de youtube">
+                                </a>
                             </td>
                             <td style="padding: 0 8px;">
-                            <a href="https://bamxtepatitlan.org">
-                                <img src="https://cdn1.iconfinder.com/data/icons/material-core/20/language-32.png" alt="Sitio web">
-                            </a>
+                                <a href="https://www.tiktok.com/@bancodealimentosdzamora">
+                                    <img src="https://cdn0.iconfinder.com/data/icons/font-awesome-brands-vol-2/512/tiktok-32.png" alt="Tiktok">
+                                </a>
+                            </td>
+                            <td style="padding: 0 8px;">
+                                <a href="https://bamxzamora.org">
+                                    <img src="https://cdn1.iconfinder.com/data/icons/material-core/20/language-32.png" alt="Sitio web">
+                                </a>
                             </td>
                         </tr>
                         </table>
@@ -75,18 +80,18 @@ const generatePasswordResetTemplate = (token) =>  {
 
                     <!-- Dirección -->
                     <tr>
-                    <td style="padding: 15px 0; text-align: center; font-size: 14px; line-height: 1.5; color: #666;">
-                        <b>Banco Diocesano de Alimentos de los Altos</b><br>
-                        Terrerito 1326, Fraccionamiento La Puerta<br>
-                        Tepatitlán de Morelos, Jalisco
-                    </td>
+                        <td style="padding: 15px 0; text-align: center; font-size: 14px; line-height: 1.5; color: #666;">
+                            <b>Banco de Alimento de Zamora A. C.</b><br>
+                            Av. Valladolid 328, Valencia 2da Secc<br>
+                            Zamora de Hidalgo, Michoacán.
+                        </td>
                     </tr>
 
                     <!-- Aviso -->
                     <tr>
-                    <td style="padding-top: 20px; text-align: center; font-size: 12px; color: #999;">
-                        Si no te registraste en nuestra plataforma, por favor ignora este correo
-                    </td>
+                        <td style="padding-top: 20px; text-align: center; font-size: 12px; color: #999;">
+                            Si no te registraste en nuestra plataforma, por favor ignora este correo
+                        </td>
                     </tr>
                 </table>
                 </td>

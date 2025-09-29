@@ -12,7 +12,7 @@ const sendVerificationEmail = async (user) => {
         const emailHTML = generateVerificationTemplate(user);
         
         await resend.emails.send({
-            from: "notificaciones@bamxtepatitlan.org",
+            from: process.env.EMAIL_FROM,
             to: user.email,
             subject: "✅ Cuenta verificada - BAMX Tepatitlán",
             html: emailHTML
@@ -30,7 +30,7 @@ const sendPasswordResetEmail = async (user, token) => {
         const emailHTML = generatePasswordResetTemplate(token);
         
         await resend.emails.send({
-            from: "notificaciones@bamxtepatitlan.org",
+            from: process.env.EMAIL_FROM,
             to: user.email,
             subject: "🔒 Restablece tu contraseña - BAMX Tepatitlán",
             html: emailHTML
@@ -55,7 +55,7 @@ const sendTicketEmail = async (user, ticket, actionType = "actualizacion") => {
             cco.add(emailSupport);
         
         const emailOptions = {
-            from: "notificaciones@bamxtepatitlan.org",
+            from: process.env.EMAIL_FROM,
             to: user.email,
             subject: actionType === "creacion" 
                 ? "✅ Ticket creado - BAMX Tepatitlán" 
