@@ -120,6 +120,7 @@ const getAllCommunities = async (req, res) => {
             { model: Ruta, as: "ruta", attributes: [] },
             { model: Municipio, as: "municipio", attributes: [] }
           ],
+          order: [["nombre", "ASC"]],
           distinct: true
         });
         
@@ -218,6 +219,9 @@ const updateCommunity = async (req, res) => {
             return sendErrorResponse(res, 404, "Community not found");
         }
 
+        if (updates.idRuta == "")
+            updates.idRuta = null;
+
         // Update community
         const [result] = await Comunidad.update(updates, { where: { id } });
 
@@ -252,9 +256,9 @@ const deleteCommunity = async (req, res) => {
         }
 
         // Delete community
-        const result = await Comunidad.destroy({ where: { id } });
+        const result = await Comunidad.update( { idRuta: null }, { where: { id } });
 
-        if (result !== 1) {
+        if (result[0] !== 1) {
             logger.error(`Failed to delete community with ID: ${id}`); // Log error
             return sendErrorResponse(res, 500, "Failed to delete community");
         }

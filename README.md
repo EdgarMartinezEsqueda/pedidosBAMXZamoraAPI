@@ -19,3 +19,4 @@ Este proyecto es una aplicación backend desarrollada con Node.js y Express. A c
 │── index.js        # Archivo principal de la aplicación
 │── package.json    # Configuración y dependencias del proyecto
 ```
+AGREGAR 

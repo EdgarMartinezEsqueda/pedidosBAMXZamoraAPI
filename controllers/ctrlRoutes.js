@@ -43,7 +43,7 @@ const createRoute = async (req, res) => {
 
 const getAllRoutes = async (req, res) => {
     try {
-        const routes = await Ruta.findAll();
+        const routes = await Ruta.findAll( { where: { activo: true} } );
 
         logger.info(`Fetched ${routes.length} routes`); // Log success
         return sendSuccessResponse(res, 200, routes);
@@ -129,21 +129,21 @@ const deleteRoute = async (req, res) => {
             return sendErrorResponse(res, 404, "Route not found");
         }
 
-        // Delete route
-        const result = await Ruta.destroy({ where: { id } });
+        // Soft delete => set activo = false
+        const [result] = await Ruta.update({ activo: false }, { where: { id } });
 
         if (result !== 1) {
-            logger.error(`Failed to delete route with ID: ${id}`); // Log error
-            return sendErrorResponse(res, 500, "Failed to delete route");
+            logger.error(`Failed to deactivate route with ID: ${id}`);
+            return sendErrorResponse(res, 500, "Failed to deactivate route");
         }
 
-        logger.info(`Route deleted successfully: ${id}`); // Log success
-        return res.status(204).end(); // No content for successful deletion
+        logger.info(`Route deactivated successfully: ${id}`);
+        return res.status(200).json({ message: "Route deactivated" });
     } catch (e) {
-        logger.error(`Error deleting route: ${e.message}`); // Log error
+        logger.error(`Error deactivating route: ${e.message}`);
         return sendErrorResponse(res, 500, "Internal server error");
     }
-}
+};
 
 module.exports= {
     createRoute,
