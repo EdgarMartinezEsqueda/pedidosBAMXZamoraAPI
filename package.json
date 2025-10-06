@@ -1,7 +1,7 @@
 {
-  "name": "batepaAPI",
+  "name": "bamxzamoraapi",
   "version": "1.0.0",
-  "description": "API para la gestión de la aplicación de Batepa para la plataforma de pedidos",
+  "description": "API para la gestión de la aplicación de BAMX Zamopra para la plataforma de pedidos",
   "main": "index.js",
   "scripts": {
     "start": "cross-env NODE_ENV=production node index.js",

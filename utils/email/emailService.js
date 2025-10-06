@@ -14,7 +14,7 @@ const sendVerificationEmail = async (user) => {
         await resend.emails.send({
             from: process.env.EMAIL_FROM,
             to: user.email,
-            subject: "✅ Cuenta verificada - BAMX Tepatitlán",
+            subject: "✅ Cuenta verificada - BAMX Zamora",
             html: emailHTML
         });
         
@@ -32,7 +32,7 @@ const sendPasswordResetEmail = async (user, token) => {
         await resend.emails.send({
             from: process.env.EMAIL_FROM,
             to: user.email,
-            subject: "🔒 Restablece tu contraseña - BAMX Tepatitlán",
+            subject: "🔒 Restablece tu contraseña - BAMX Zamora",
             html: emailHTML
         });
         
@@ -58,8 +58,8 @@ const sendTicketEmail = async (user, ticket, actionType = "actualizacion") => {
             from: process.env.EMAIL_FROM,
             to: user.email,
             subject: actionType === "creacion" 
-                ? "✅ Ticket creado - BAMX Tepatitlán" 
-                : "🔄 Ticket actualizado - BAMX Tepatitlán",
+                ? "✅ Ticket creado - BAMX Zamora" 
+                : "🔄 Ticket actualizado - BAMX Zamora",
             html: emailHTML
         };
 

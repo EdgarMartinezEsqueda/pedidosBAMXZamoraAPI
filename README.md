@@ -1,4 +1,4 @@
-# API Pedidos BAMX Tepatitlán
+# API Pedidos BAMX Zamora
 
 Este proyecto es una aplicación backend desarrollada con Node.js y Express. A continuación, se describe la estructura del proyecto y su propósito.
 

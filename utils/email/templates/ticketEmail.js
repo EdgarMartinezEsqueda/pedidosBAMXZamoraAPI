@@ -32,7 +32,7 @@ const generateTicketTemplate = (ticket, actionType) => {
                     <tr>
                         <td colspan="4" valign="top" class="image-section" style="border-collapse: collapse;border: 0;margin: 0;padding: 0;-webkit-text-size-adjust: none;color: #555559;font-family: Arial, sans-serif;font-size: 16px;line-height: 26px;background-color: #fff;border-bottom: 4px solid #0a8e3d; text-align: center;">
                         <a href="https://bamxzamora.org">
-                            <img class="top-image" src="https://bamxzamora.org/assets/images/logo.png" style="width: 100px; margin:20px auto; display: block;" alt="BAMX Tepatitlán logo">
+                            <img class="top-image" src="https://bamxzamora.org/assets/images/zamora.webp" style="width: 100px; margin:20px auto; display: block;" alt="BAMX Zamora logo">
                         </a>
                         </td>
                     </tr>
