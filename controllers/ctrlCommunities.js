@@ -21,8 +21,8 @@ const sendSuccessResponse = (res, statusCode, data) => {
 
 const createCommunity = async (req, res) => {
     try {
-        const { nombre, jefa, contacto, direccion, idRuta, idMunicipio } = req.body;
-        
+        const { nombre, jefa, contacto, direccion, idRuta, idMunicipio, costoPaquete, notas } = req.body;
+
         // Validate required fields
         if (!nombre || !idRuta || !idMunicipio) 
             return sendErrorResponse(res, 400, "Missing or invalid fields");
@@ -34,7 +34,9 @@ const createCommunity = async (req, res) => {
             jefa,
             contacto,
             direccion,
-            idRuta
+            idRuta,
+            costoPaquete,
+            notas
         });
 
         // Return the created community

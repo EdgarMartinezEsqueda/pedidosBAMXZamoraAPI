@@ -197,8 +197,7 @@ const getOrder = async (req, res) => {
         let total = 0;
         if (pedidoPlain.pedidoComunidad && pedidoPlain.pedidoComunidad.length > 0) {
             pedidoPlain.pedidoComunidad.forEach(item => {
-                const costo = item.comunidad?.costoPaquete || 170.00; // Default 170.00 si no existe
-                
+                const costo = item.comunidad?.costoPaquete || 100.00; // Default 100.00 si no existe
                 // Asegurar que los valores sean numéricos
                 const completo = Number(item.despensasCosto) || 0;
                 const medio = Number(item.despensasMedioCosto) || 0;
