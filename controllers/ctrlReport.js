@@ -20,29 +20,68 @@ const sendSuccessResponse = (res, statusCode, data) => {
     });
 };
 
+// Calcular devoluciones totales
+const calcularDevolucionesTotales = (pedido) => {
+    // Si tiene devoluciones desglosadas (al menos una > 0)
+    const tieneDesglose = 
+        (pedido.devolucionesCosto || 0) > 0 ||
+        (pedido.devolucionesMedioCosto || 0) > 0 ||
+        (pedido.devolucionesSinCosto || 0) > 0 ||
+        (pedido.devolucionesApadrinadas || 0) > 0;
+    
+    if (tieneDesglose) {
+        return (pedido.devolucionesCosto || 0) +
+               (pedido.devolucionesMedioCosto || 0) +
+               (pedido.devolucionesSinCosto || 0) +
+               (pedido.devolucionesApadrinadas || 0);
+    }
+    
+    // Si no, usar el campo legacy
+    return pedido.devoluciones || 0;
+};
+
+// ✅ HELPER: Obtener devoluciones desglosadas o null si es legacy
+const obtenerDevolucionesDesglosadas = (pedido) => {
+    const tieneDesglose = 
+        (pedido.devolucionesCosto || 0) > 0 ||
+        (pedido.devolucionesMedioCosto || 0) > 0 ||
+        (pedido.devolucionesSinCosto || 0) > 0 ||
+        (pedido.devolucionesApadrinadas || 0) > 0;
+    
+    if (tieneDesglose) {
+        return {
+            costo: pedido.devolucionesCosto || 0,
+            medioCosto: pedido.devolucionesMedioCosto || 0,
+            sinCosto: pedido.devolucionesSinCosto || 0,
+            apadrinadas: pedido.devolucionesApadrinadas || 0
+        };
+    }
+    
+    return null; // Es legacy
+};
+
 const getResumen = async (req, res) => {
     try {
         const { view, year, month } = req.query;
         
-        // Validar parámetros
-        if (!view || (view !== 'anual' && view !== 'mensual')) 
+        if (!view || (view !== "anual" && view !== "mensual")) 
             return sendErrorResponse(res, 400, "Parámetro 'view' inválido. Debe ser 'anual' o 'mensual'");
         
         if (!year) 
             return sendErrorResponse(res, 400, "Parámetro 'year' requerido");
         
-        if (view === 'mensual' && !month) 
+        if (view === "mensual" && !month) 
             return sendErrorResponse(res, 400, "Parámetro 'month' requerido para vista mensual");
 
         // Calcular rangos de fechas según la vista
         let startDate, endDate;
-        if (view === 'anual') {
-            startDate = new Date(year, 0, 1); // 1 de Enero del año
-            endDate = new Date(year, 11, 31); // 31 de Diciembre del año
-        } else { // mensual
-            const monthIndex = parseInt(month) - 1; // Los meses en JS son 0-indexed
+        if (view === "anual") {
+            startDate = new Date(year, 0, 1);
+            endDate = new Date(year, 11, 31);
+        } else {
+            const monthIndex = parseInt(month) - 1;
             startDate = new Date(year, monthIndex, 1);
-            endDate = new Date(year, monthIndex + 1, 0); // Último día del mes
+            endDate = new Date(year, monthIndex + 1, 0);
         }
 
         // A. Obtener pedidos según el rango de fechas
@@ -75,37 +114,34 @@ const getResumen = async (req, res) => {
             let comunidades = {};
             let rutas = {};
             let devolucionesRutas = {};
+            // Devoluciones desglosadas por ruta
+            let devolucionesRutasDesglosadas = {};
 
             pedidos.forEach(pedido => {
-                // Determinar clave según vista
-                const clave = viewType === 'anual' 
-                    ? new Date(pedido.fechaEntrega).toISOString().slice(0, 7) // YYYY-MM
-                    : 'current'; // Única clave para vista mensual
+                const clave = viewType === "anual" 
+                    ? new Date(pedido.fechaEntrega).toISOString().slice(0, 7)
+                    : "current";
 
                 if (!despensasPorMes[clave]) {
                     despensasPorMes[clave] = { costo: 0, medioCosto: 0, sinCosto: 0, apadrinadas: 0 };
                 }
                 
                 pedido.pedidoComunidad.forEach(pc => {
-                    // Sumar tipos de despensas
                     tiposDespensas.costo += pc.despensasCosto;
                     tiposDespensas.medioCosto += pc.despensasMedioCosto;
                     tiposDespensas.sinCosto += pc.despensasSinCosto;
                     tiposDespensas.apadrinadas += pc.despensasApadrinadas;
 
-                    // Sumar por mes/clave
                     despensasPorMes[clave].costo += pc.despensasCosto;
                     despensasPorMes[clave].medioCosto += pc.despensasMedioCosto;
                     despensasPorMes[clave].sinCosto += pc.despensasSinCosto;
                     despensasPorMes[clave].apadrinadas += pc.despensasApadrinadas;
 
-                    // Top comunidades
                     const comunidadNombre = pc.comunidad.nombre;
                     comunidades[comunidadNombre] = (comunidades[comunidadNombre] || 0) + 
                         pc.despensasCosto + pc.despensasMedioCosto + pc.despensasSinCosto;
                 });
 
-                // Top trabajadores (por despensas)
                 if (pedido.usuario) {
                     const tsId = pedido.usuario.id;
                     let totalDespensas = 0;
@@ -119,7 +155,7 @@ const getResumen = async (req, res) => {
                     };
                 }
 
-                // Top rutas y devoluciones
+                // Top rutas con devoluciones híbridas
                 if (pedido.ruta) {
                     const rutaNombre = pedido.ruta.nombre;
                     const totalDespensas = pedido.pedidoComunidad
@@ -128,17 +164,33 @@ const getResumen = async (req, res) => {
                             pc.despensasSinCosto + pc.despensasApadrinadas, 0);
                     
                     rutas[rutaNombre] = (rutas[rutaNombre] || 0) + totalDespensas;
-                    devolucionesRutas[rutaNombre] = (devolucionesRutas[rutaNombre] || 0) + (pedido.devoluciones || 0);
+                    
+                    // Calcular devoluciones (híbrido)
+                    const devolucionesTotales = calcularDevolucionesTotales(pedido);
+                    devolucionesRutas[rutaNombre] = (devolucionesRutas[rutaNombre] || 0) + devolucionesTotales;
+                    
+                    // Guardar desglose si existe
+                    const desglose = obtenerDevolucionesDesglosadas(pedido);
+                    if (desglose) {
+                        if (!devolucionesRutasDesglosadas[rutaNombre]) {
+                            devolucionesRutasDesglosadas[rutaNombre] = {
+                                costo: 0, medioCosto: 0, sinCosto: 0, apadrinadas: 0
+                            };
+                        }
+                        devolucionesRutasDesglosadas[rutaNombre].costo += desglose.costo;
+                        devolucionesRutasDesglosadas[rutaNombre].medioCosto += desglose.medioCosto;
+                        devolucionesRutasDesglosadas[rutaNombre].sinCosto += desglose.sinCosto;
+                        devolucionesRutasDesglosadas[rutaNombre].apadrinadas += desglose.apadrinadas;
+                    }
                 }
             });
             
-            // Formatear despensasPorMes según vista
             let formattedDespensas = [];
-            if (viewType === 'anual') {
+            if (viewType === "anual") {
                 formattedDespensas = Object.entries(despensasPorMes)
                     .map(([mes, valores]) => ({ mes, ...valores }));
             } else {
-                formattedDespensas = [{ mes: `${year}-${month.padStart(2, '0')}`, ...despensasPorMes['current'] }];
+                formattedDespensas = [{ mes: `${year}-${month.padStart(2, "0")}`, ...despensasPorMes["current"] }];
             }
 
             return {
@@ -147,14 +199,27 @@ const getResumen = async (req, res) => {
                 topTrabajadores: Object.values(trabajadores).sort((a, b) => b.total - a.total).slice(0, 5),
                 topComunidades: Object.entries(comunidades).sort((a, b) => b[1] - a[1]).slice(0, 5),
                 topRutas: Object.entries(rutas).sort((a, b) => b[1] - a[1]).slice(0, 5),
-                rutasDevoluciones: Object.entries(devolucionesRutas).sort((a, b) => b[1] - a[1]).slice(0, 5)
+                rutasDevoluciones: Object.entries(devolucionesRutas)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5)
+                    .map(([ruta, total]) => ({
+                        ruta,
+                        total,
+                        desglose: devolucionesRutasDesglosadas[ruta] || null // null = legacy
+                    }))
             };
         };
 
         // C. Calendario (solo para vista mensual)
         let calendario = [];
         calendario = await Pedido.findAll({
-            attributes: ["fechaEntrega", "estado"],
+            attributes: [
+                "fechaEntrega", "estado",
+                // ✅ Incluir campos de devoluciones
+                "devoluciones",
+                "devolucionesCosto", "devolucionesMedioCosto",
+                "devolucionesSinCosto", "devolucionesApadrinadas"
+            ],
             include: [
                 { model: Ruta, attributes: ["nombre"], as: "ruta" },
                 { model: PedidoComunidad, as: "pedidoComunidad", attributes: [
@@ -177,7 +242,10 @@ const getResumen = async (req, res) => {
                     fecha: p.fechaEntrega,
                     estado: p.estado,
                     ruta: p.ruta?.nombre || "Sin ruta",
-                    totalDespensas
+                    totalDespensas,
+                    // Incluir devoluciones totales
+                    devoluciones: calcularDevolucionesTotales(p),
+                    devolucionesDesglose: obtenerDevolucionesDesglosadas(p)
                 };
             })
         };
@@ -190,148 +258,180 @@ const getResumen = async (req, res) => {
 };
 
 const getReporteRutas = async (req, res) => {
-    try {
-        const { view, year, month } = req.query;
-        
-        // Validar parámetros
-        if (!view || (view !== 'anual' && view !== 'mensual')) 
-            return sendErrorResponse(res, 400, "Parámetro 'view' inválido. Debe ser 'anual' o 'mensual'");
-        
-        if (!year) 
-            return sendErrorResponse(res, 400, "Parámetro 'year' requerido");
-        
-        if (view === 'mensual' && !month) 
-            return sendErrorResponse(res, 400, "Parámetro 'month' requerido para vista mensual");
+  try {
+    const { view, year, month } = req.query;
 
-        // Calcular rangos de fechas según la vista
-        let startDate, endDate;
-        if (view === 'anual') {
-            startDate = new Date(year, 0, 1); // 1 de Enero del año
-            endDate = new Date(year, 11, 31); // 31 de Diciembre del año
-        } else { // mensual
-            const monthIndex = parseInt(month) - 1; // Los meses en JS son 0-indexed
-            startDate = new Date(year, monthIndex, 1);
-            endDate = new Date(year, monthIndex + 1, 0); // Último día del mes
-        }
+    if (!view || (view !== "anual" && view !== "mensual"))
+      return sendErrorResponse(res, 400, "Parámetro 'view' inválido. Debe ser 'anual' o 'mensual'");
 
-        // 1. Obtener todas las rutas con sus métricas
-        const rutas = await Ruta.findAll({
-            as: "rutas",
-            attributes: [
-                "id",
-                "nombre",
-                [Sequelize.fn("COUNT", Sequelize.col("pedido.id")), "totalPedidos"],
-                [Sequelize.fn("SUM", Sequelize.col("pedido.devoluciones")), "totalDevoluciones"],
-                [Sequelize.fn("SUM", Sequelize.col("pedido.pedidoComunidad.despensasCosto")), "despensasCosto"],
-                [Sequelize.fn("SUM", Sequelize.col("pedido.pedidoComunidad.despensasMedioCosto")), "despensasMedioCosto"],
-                [Sequelize.fn("SUM", Sequelize.col("pedido.pedidoComunidad.despensasSinCosto")), "despensasSinCosto"],
-                [Sequelize.fn("SUM", Sequelize.col("pedido.pedidoComunidad.despensasApadrinadas")), "despensasApadrinadas"]
-            ],
-            include: [{
-                model: Pedido,
-                as: "pedido",
-                attributes: [],
-                include: [{
-                    model: PedidoComunidad,
-                    as: "pedidoComunidad",
-                    attributes: []
-                }],
-                where: { 
-                    fechaEntrega: { 
-                        [Op.between]: [startDate, endDate] 
-                    } 
-                },
-            }],
-            group: ["rutas.id"],
-            raw: true
-        });
+    if (!year)
+      return sendErrorResponse(res, 400, "Parámetro 'year' requerido");
 
-        // 2. Procesar datos para respuesta
-        const procesado = rutas.map(ruta => {
-            const totalDespensas = 
-                (Number(ruta.despensasCosto) || 0) +
-                (Number(ruta.despensasMedioCosto) || 0) +
-                (Number(ruta.despensasSinCosto) || 0) +
-                (Number(ruta.despensasApadrinadas) || 0);
+    if (view === "mensual" && !month)
+      return sendErrorResponse(res, 400, "Parámetro 'month' requerido para vista mensual");
 
-            return {
-                id: ruta.id,
-                nombre: ruta.nombre,
-                metricas: {
-                    pedidos: Number(ruta.totalPedidos) || 0,
-                    despensas: totalDespensas,
-                    devoluciones: Number(ruta.totalDevoluciones) || 0,
-                    detalleDespensas: {
-                        costo: Number(ruta.despensasCosto) || 0,
-                        medioCosto: Number(ruta.despensasMedioCosto) || 0,
-                        sinCosto: Number(ruta.despensasSinCosto) || 0,
-                        apadrinadas: Number(ruta.despensasApadrinadas) || 0
-                    }
-                }
-            };
-        });
-
-        // 3. Ordenar para ranking
-        const rankingPedidos = [...procesado].sort((a, b) => 
-            b.metricas.pedidos - a.metricas.pedidos
-        );
-        const rankingDespensas = [...procesado].sort((a, b) => 
-            b.metricas.despensas - a.metricas.despensas
-        );
-
-        // 4. Datos para gráfica comparativa
-        const datosGrafica = {
-            labels: procesado.map(r => r.nombre),
-            datasets: [{
-                label: "Total Despensas",
-                data: procesado.map(r => r.metricas.despensas)
-            }, {
-                label: "Devoluciones",
-                data: procesado.map(r => r.metricas.devoluciones)
-            }]
-        };
-
-        const response = {
-            tablaMetricas: procesado,
-            rankingPedidos,
-            rankingDespensas,
-            graficaComparativa: datosGrafica
-        };
-
-        sendSuccessResponse(res, 200, response );
-
-    } catch (error) {
-        logger.error("Error en getReporteRutas: ", error);
-        sendErrorResponse(res, 500, error.message);
+    let startDate, endDate;
+    if (view === "anual") {
+      startDate = new Date(year, 0, 1);
+      endDate = new Date(year, 11, 31);
+    } else {
+      const monthIndex = parseInt(month) - 1;
+      startDate = new Date(year, monthIndex, 1);
+      endDate = new Date(year, monthIndex + 1, 0);
     }
+
+    // Query 1: Métricas por pedido (sin inflar con pedidoComunidad)
+    const rutasPedidos = await Ruta.findAll({
+      attributes: [
+        "id",
+        "nombre",
+        [Sequelize.fn("COUNT", Sequelize.fn("DISTINCT", Sequelize.col("pedido.id"))), "totalPedidos"],
+        [Sequelize.fn("SUM", Sequelize.col("pedido.devoluciones")), "totalDevolucionesLegacy"],
+        [Sequelize.fn("SUM", Sequelize.col("pedido.devolucionesCosto")), "devolucionesCosto"],
+        [Sequelize.fn("SUM", Sequelize.col("pedido.devolucionesMedioCosto")), "devolucionesMedioCosto"],
+        [Sequelize.fn("SUM", Sequelize.col("pedido.devolucionesSinCosto")), "devolucionesSinCosto"],
+        [Sequelize.fn("SUM", Sequelize.col("pedido.devolucionesApadrinadas")), "devolucionesApadrinadas"],
+      ],
+      include: [{
+        model: Pedido,
+        as: "pedido",
+        attributes: [],
+        where: {
+          fechaEntrega: { [Op.between]: [startDate, endDate] }
+        }
+      }],
+      group: ["rutas.id"],
+      raw: true
+    });
+
+    // Query 2: Métricas de despensas (pedidoComunidad)
+    const rutasComunidades = await Ruta.findAll({
+      attributes: [
+        "id",
+        [Sequelize.fn("SUM", Sequelize.col("pedido->pedidoComunidad.despensasCosto")), "despensasCosto"],
+        [Sequelize.fn("SUM", Sequelize.col("pedido->pedidoComunidad.despensasMedioCosto")), "despensasMedioCosto"],
+        [Sequelize.fn("SUM", Sequelize.col("pedido->pedidoComunidad.despensasSinCosto")), "despensasSinCosto"],
+        [Sequelize.fn("SUM", Sequelize.col("pedido->pedidoComunidad.despensasApadrinadas")), "despensasApadrinadas"],
+      ],
+      include: [{
+        model: Pedido,
+        as: "pedido",
+        attributes: [],
+        include: [{
+          model: PedidoComunidad,
+          as: "pedidoComunidad",
+          attributes: []
+        }],
+        where: {
+          fechaEntrega: { [Op.between]: [startDate, endDate] }
+        }
+      }],
+      group: ["rutas.id"],
+      raw: true
+    });
+
+    // Merge de resultados
+    const comunidadesMap = Object.fromEntries(
+      rutasComunidades.map(r => [r.id, r])
+    );
+
+    const procesado = rutasPedidos.map(ruta => {
+      const comunidad = comunidadesMap[ruta.id] || {};
+
+      const totalDespensas =
+        (parseInt(comunidad.despensasCosto) || 0) +
+        (parseInt(comunidad.despensasMedioCosto) || 0) +
+        (parseInt(comunidad.despensasSinCosto) || 0) +
+        (parseInt(comunidad.despensasApadrinadas) || 0);
+
+      const devolucionesDesglosadas =
+        (parseInt(ruta.devolucionesCosto) || 0) +
+        (parseInt(ruta.devolucionesMedioCosto) || 0) +
+        (parseInt(ruta.devolucionesSinCosto) || 0) +
+        (parseInt(ruta.devolucionesApadrinadas) || 0);
+
+      const totalDevoluciones = devolucionesDesglosadas > 0
+        ? devolucionesDesglosadas
+        : (parseInt(ruta.totalDevolucionesLegacy) || 0);
+
+      const tieneDesglose = devolucionesDesglosadas > 0;
+
+      return {
+        id: ruta.id,
+        nombre: ruta.nombre,
+        metricas: {
+          pedidos: Number(ruta.totalPedidos) || 0,
+          despensas: totalDespensas,
+          devoluciones: totalDevoluciones,
+          tieneDevolucionesDesglosadas: tieneDesglose,
+          devolucionesDesglose: tieneDesglose ? {
+            costo: Number(ruta.devolucionesCosto) || 0,
+            medioCosto: Number(ruta.devolucionesMedioCosto) || 0,
+            sinCosto: Number(ruta.devolucionesSinCosto) || 0,
+            apadrinadas: Number(ruta.devolucionesApadrinadas) || 0
+          } : null,
+          detalleDespensas: {
+            costo: Number(comunidad.despensasCosto) || 0,
+            medioCosto: Number(comunidad.despensasMedioCosto) || 0,
+            sinCosto: Number(comunidad.despensasSinCosto) || 0,
+            apadrinadas: Number(comunidad.despensasApadrinadas) || 0
+          }
+        }
+      };
+    });
+
+    // Rankings y gráfica
+    const rankingPedidos = [...procesado].sort((a, b) => b.metricas.pedidos - a.metricas.pedidos);
+    const rankingDespensas = [...procesado].sort((a, b) => b.metricas.despensas - a.metricas.despensas);
+
+    const datosGrafica = {
+      labels: procesado.map(r => r.nombre),
+      datasets: [
+        { label: "Total Despensas", data: procesado.map(r => r.metricas.despensas) },
+        { label: "Devoluciones", data: procesado.map(r => r.metricas.devoluciones) }
+      ]
+    };
+
+    const response = {
+      tablaMetricas: procesado,
+      rankingPedidos,
+      rankingDespensas,
+      graficaComparativa: datosGrafica
+    };
+
+    sendSuccessResponse(res, 200, response);
+
+  } catch (error) {
+    logger.error("Error en getReporteRutas: ", error);
+    sendErrorResponse(res, 500, error.message);
+  }
 };
+
 
 const getReporteTS = async (req, res) => {
     try {
         const { view, year, month } = req.query;
         
-        // Validar parámetros
-        if (!view || (view !== 'anual' && view !== 'mensual')) 
+        if (!view || (view !== "anual" && view !== "mensual")) 
             return sendErrorResponse(res, 400, "Parámetro 'view' inválido. Debe ser 'anual' o 'mensual'");
         
         if (!year) 
             return sendErrorResponse(res, 400, "Parámetro 'year' requerido");
         
-        if (view === 'mensual' && !month) 
+        if (view === "mensual" && !month) 
             return sendErrorResponse(res, 400, "Parámetro 'month' requerido para vista mensual");
 
-        // Calcular rangos de fechas según la vista
         let startDate, endDate;
-        if (view === 'anual') {
-            startDate = new Date(year, 0, 1); // 1 de Enero del año
-            endDate = new Date(year, 11, 31); // 31 de Diciembre del año
-        } else { // mensual
-            const monthIndex = parseInt(month) - 1; // Los meses en JS son 0-indexed
+        if (view === "anual") {
+            startDate = new Date(year, 0, 1);
+            endDate = new Date(year, 11, 31);
+        } else {
+            const monthIndex = parseInt(month) - 1;
             startDate = new Date(year, monthIndex, 1);
-            endDate = new Date(year, monthIndex + 1, 0); // Último día del mes
+            endDate = new Date(year, monthIndex + 1, 0);
         }
 
-        // 1. Obtener métricas base con una sola consulta
+        // Incluir nuevos campos de devoluciones
         const trabajadores = await Usuario.findAll({
             include: [{
                 model: Pedido,
@@ -353,7 +453,13 @@ const getReporteTS = async (req, res) => {
                 "id",
                 "username",
                 [Sequelize.literal("(SELECT COUNT(*) FROM pedidos WHERE pedidos.idTs = usuarios.id)"), "totalPedidos"],
-                [Sequelize.literal("(SELECT SUM(devoluciones) FROM pedidos WHERE pedidos.idTs = usuarios.id)"), "totalDevoluciones"],
+                // Legacy
+                [Sequelize.literal("(SELECT SUM(devoluciones) FROM pedidos WHERE pedidos.idTs = usuarios.id)"), "totalDevolucionesLegacy"],
+                // Devoluciones desglosadas
+                [Sequelize.literal("(SELECT SUM(devolucionesCosto) FROM pedidos WHERE pedidos.idTs = usuarios.id)"), "devolucionesCosto"],
+                [Sequelize.literal("(SELECT SUM(devolucionesMedioCosto) FROM pedidos WHERE pedidos.idTs = usuarios.id)"), "devolucionesMedioCosto"],
+                [Sequelize.literal("(SELECT SUM(devolucionesSinCosto) FROM pedidos WHERE pedidos.idTs = usuarios.id)"), "devolucionesSinCosto"],
+                [Sequelize.literal("(SELECT SUM(devolucionesApadrinadas) FROM pedidos WHERE pedidos.idTs = usuarios.id)"), "devolucionesApadrinadas"],
                 [Sequelize.fn("SUM", Sequelize.col("pedido.pedidoComunidad.despensasCosto")), "despensasCosto"],
                 [Sequelize.fn("SUM", Sequelize.col("pedido.pedidoComunidad.despensasMedioCosto")), "despensasMedio"],
                 [Sequelize.fn("SUM", Sequelize.col("pedido.pedidoComunidad.despensasSinCosto")), "despensasSinCosto"],
@@ -364,7 +470,6 @@ const getReporteTS = async (req, res) => {
             raw: true
         });
 
-        // 2. Obtener pedidos pendientes y últimos 3
         const [pendientes, ultimosPedidos] = await Promise.all([
             Pedido.count({
                 where: { 
@@ -397,20 +502,33 @@ const getReporteTS = async (req, res) => {
             })
         ]);
 
-        // 3. Procesamiento en JS
         const totalGlobalPedidos = trabajadores.reduce((acc, ts) => acc + Number(ts.totalPedidos || 0), 0);
         
+        // Calcular devoluciones híbridas
         const procesado = trabajadores.map(ts => {
             const totalDespensas = Object.keys(ts)
                 .filter(k => k.startsWith("despensas"))
                 .reduce((acc, key) => acc + Number(ts[key] || 0), 0);
+
+            // Calcular devoluciones totales (híbrido)
+            const devolucionesDesglosadas = 
+                (Number(ts.devolucionesCosto) || 0) +
+                (Number(ts.devolucionesMedioCosto) || 0) +
+                (Number(ts.devolucionesSinCosto) || 0) +
+                (Number(ts.devolucionesApadrinadas) || 0);
+            
+            const totalDevoluciones = devolucionesDesglosadas > 0 
+                ? devolucionesDesglosadas 
+                : (Number(ts.totalDevolucionesLegacy) || 0);
+
+            const tieneDesglose = devolucionesDesglosadas > 0;
 
             const pedidosPendientes = pendientes.find(p => p.idTs === ts.id)?.count || 0;
             const avgDespensas = ts.totalPedidos > 0 
                 ? (totalDespensas / ts.totalPedidos).toFixed(1)
                 : 0;
             const porcentajeDevoluciones = ts.totalPedidos > 0 && totalDespensas > 0
-                ? ((ts.totalDevoluciones / totalDespensas) * 100).toFixed(1)
+                ? ((totalDevoluciones / totalDespensas) * 100).toFixed(1)
                 : 0;
                 
             return {
@@ -418,7 +536,15 @@ const getReporteTS = async (req, res) => {
                 metricas: {
                     pedidos: Number(ts.totalPedidos) || 0,
                     despensas: totalDespensas,
-                    devoluciones: Number(ts.totalDevoluciones) || 0,
+                    devoluciones: totalDevoluciones,
+                    // Desglose si existe
+                    tieneDevolucionesDesglosadas: tieneDesglose,
+                    devolucionesDesglose: tieneDesglose ? {
+                        costo: Number(ts.devolucionesCosto) || 0,
+                        medioCosto: Number(ts.devolucionesMedioCosto) || 0,
+                        sinCosto: Number(ts.devolucionesSinCosto) || 0,
+                        apadrinadas: Number(ts.devolucionesApadrinadas) || 0
+                    } : null,
                     pedidosPendientes,
                     avgDespensas,
                     porcentajeDevoluciones,
@@ -430,14 +556,12 @@ const getReporteTS = async (req, res) => {
             };
         });
 
-        // 4. Formatear última actividad
         const ultimosPorTS = ultimosPedidos.reduce((acc, pedido) => {
             if (!acc[pedido.idTs]) acc[pedido.idTs] = [];
             if (acc[pedido.idTs].length < 3) acc[pedido.idTs].push(pedido);
             return acc;
         }, {});
 
-        // 5. Respuesta final
         const respuesta = {
             tablaMetricas: procesado,
             graficas: {
@@ -474,42 +598,39 @@ const getReporteDespensas = async (req, res) => {
     try {
         const { view, year, month, comunidadId, municipioId, rutaId, tsId, limit = 10 } = req.query;
         
-        // Validar parámetros
-        if (!view || (view !== 'anual' && view !== 'mensual')) 
+        if (!view || (view !== "anual" && view !== "mensual")) 
             return sendErrorResponse(res, 400, "Parámetro 'view' inválido. Debe ser 'anual' o 'mensual'");
         
         if (!year) 
             return sendErrorResponse(res, 400, "Parámetro 'year' requerido");
         
-        if (view === 'mensual' && !month) 
+        if (view === "mensual" && !month) 
             return sendErrorResponse(res, 400, "Parámetro 'month' requerido para vista mensual");
 
-        // Calcular rangos de fechas según la vista
         let startDate, endDate;
-        if (view === 'anual') {
-            startDate = new Date(year, 0, 1); // 1 de Enero del año
-            endDate = new Date(year, 11, 31); // 31 de Diciembre del año
-        } else { // mensual
-            const monthIndex = parseInt(month) - 1; // Los meses en JS son 0-indexed
+        if (view === "anual") {
+            startDate = new Date(year, 0, 1);
+            endDate = new Date(year, 11, 31);
+        } else {
+            const monthIndex = parseInt(month) - 1;
             startDate = new Date(year, monthIndex, 1);
-            endDate = new Date(year, monthIndex + 1, 0); // Último día del mes
+            endDate = new Date(year, monthIndex + 1, 0);
         }
 
-        // Construir includes dinámicos para comunidad y municipio
         const pedidoComunidadInclude = {
             model: PedidoComunidad,
             as: "pedidoComunidad",
             include: [{
                 model: Comunidad,
                 as: "comunidad",
-                include: [{  // <- Incluir Municipio siempre
+                include: [{
                     model: Municipio,
                     as: "municipio",
-                    ...(municipioId && { where: { id: municipioId } }), // Filtro opcional
-                    required: !!municipioId // Solo requerido si hay filtro
+                    ...(municipioId && { where: { id: municipioId } }),
+                    required: !!municipioId
                 }]
             }],
-            required: comunidadId || municipioId // Solo requerido si hay filtros
+            required: comunidadId || municipioId
         };
 
         if (comunidadId || municipioId) {
@@ -535,8 +656,14 @@ const getReporteDespensas = async (req, res) => {
             pedidoComunidadInclude.required = true;
         }
 
-        // Obtener pedidos con relaciones
+        // Incluir campos de devoluciones
         const pedidos = await Pedido.findAll({
+            attributes: [
+                "id", "fechaEntrega", "estado",
+                "devoluciones", // Legacy
+                "devolucionesCosto", "devolucionesMedioCosto", 
+                "devolucionesSinCosto", "devolucionesApadrinadas"
+            ],
             where: {
                 fechaEntrega: {
                     [Op.between]: [startDate, endDate]
@@ -550,26 +677,57 @@ const getReporteDespensas = async (req, res) => {
             order: [["fechaEntrega", "DESC"]]
         });
 
-        // Procesar datos para las métricas
         let monthlyData = {};
         let tiposDespensas = { costo: 0, medioCosto: 0, sinCosto: 0, apadrinadas: 0 };
         let devolucionesPorMes = {};
         let devolucionesPorRuta = {};
+        // Devoluciones desglosadas
+        let devolucionesPorMesDesglosadas = {};
+        let devolucionesPorRutaDesglosadas = {};
         let routeStats = {};
         let comunidadStats = {};
         let totalDespensas = 0;
 
         pedidos.forEach(pedido => {
-            // Procesar devoluciones
-            const mesKey = new Date( pedido.fechaEntrega ).toISOString().slice(0, 7);
-            devolucionesPorMes[mesKey] = (devolucionesPorMes[mesKey] || 0) + (pedido.devoluciones || 0);
+            const mesKey = new Date(pedido.fechaEntrega).toISOString().slice(0, 7);
+            
+            // Procesar devoluciones híbridas
+            const devolucionesTotales = calcularDevolucionesTotales(pedido);
+            const desglose = obtenerDevolucionesDesglosadas(pedido);
+            
+            devolucionesPorMes[mesKey] = (devolucionesPorMes[mesKey] || 0) + devolucionesTotales;
+            
+            // Desglose por mes si existe
+            if (desglose) {
+                if (!devolucionesPorMesDesglosadas[mesKey]) {
+                    devolucionesPorMesDesglosadas[mesKey] = {
+                        costo: 0, medioCosto: 0, sinCosto: 0, apadrinadas: 0
+                    };
+                }
+                devolucionesPorMesDesglosadas[mesKey].costo += desglose.costo;
+                devolucionesPorMesDesglosadas[mesKey].medioCosto += desglose.medioCosto;
+                devolucionesPorMesDesglosadas[mesKey].sinCosto += desglose.sinCosto;
+                devolucionesPorMesDesglosadas[mesKey].apadrinadas += desglose.apadrinadas;
+            }
             
             const rutaNombre = pedido.ruta?.nombre || "Sin ruta";
-            devolucionesPorRuta[rutaNombre] = (devolucionesPorRuta[rutaNombre] || 0) + (pedido.devoluciones || 0);
+            devolucionesPorRuta[rutaNombre] = (devolucionesPorRuta[rutaNombre] || 0) + devolucionesTotales;
+            
+            // Desglose por ruta si existe
+            if (desglose) {
+                if (!devolucionesPorRutaDesglosadas[rutaNombre]) {
+                    devolucionesPorRutaDesglosadas[rutaNombre] = {
+                        costo: 0, medioCosto: 0, sinCosto: 0, apadrinadas: 0
+                    };
+                }
+                devolucionesPorRutaDesglosadas[rutaNombre].costo += desglose.costo;
+                devolucionesPorRutaDesglosadas[rutaNombre].medioCosto += desglose.medioCosto;
+                devolucionesPorRutaDesglosadas[rutaNombre].sinCosto += desglose.sinCosto;
+                devolucionesPorRutaDesglosadas[rutaNombre].apadrinadas += desglose.apadrinadas;
+            }
 
-            // Procesar cada PedidoComunidad
             pedido.pedidoComunidad.forEach(pc => {
-                const mes = new Date( pedido.fechaEntrega ).toISOString().slice(0, 7);
+                const mes = new Date(pedido.fechaEntrega).toISOString().slice(0, 7);
                 if (!monthlyData[mes]) monthlyData[mes] = { costo: 0, medioCosto: 0, sinCosto: 0, apadrinadas: 0 };
                 
                 monthlyData[mes].costo += pc.despensasCosto;
@@ -577,14 +735,12 @@ const getReporteDespensas = async (req, res) => {
                 monthlyData[mes].sinCosto += pc.despensasSinCosto;
                 monthlyData[mes].apadrinadas += pc.despensasApadrinadas;
 
-                // Sumar tipos
                 tiposDespensas.costo += pc.despensasCosto;
                 tiposDespensas.medioCosto += pc.despensasMedioCosto;
                 tiposDespensas.sinCosto += pc.despensasSinCosto;
                 tiposDespensas.apadrinadas += pc.despensasApadrinadas;
                 totalDespensas += pc.despensasCosto + pc.despensasMedioCosto + pc.despensasSinCosto + pc.despensasApadrinadas;
 
-                // Estadísticas por ruta
                 if (pedido.ruta) {
                     const rutaId = pedido.ruta.id;
                     routeStats[rutaId] = routeStats[rutaId] || { nombre: pedido.ruta.nombre, totalDespensas: 0, totalPedidos: 0 };
@@ -592,7 +748,6 @@ const getReporteDespensas = async (req, res) => {
                     routeStats[rutaId].totalPedidos += 1;
                 }
 
-                // Estadísticas por comunidad
                 if (pc.comunidad) {
                     const comunidadId = pc.comunidad.id;
                     const comunidadNombre = pc.comunidad.nombre;
@@ -602,16 +757,15 @@ const getReporteDespensas = async (req, res) => {
                         nombre: comunidadNombre,
                         municipio: municipioNombre,
                         totalDespensas: 0, 
-                        totalPedidos: new Set()  // Usar Set para evitar duplicados
+                        totalPedidos: new Set()
                     };
                     
                     comunidadStats[comunidadId].totalDespensas += pc.despensasCosto + pc.despensasMedioCosto + pc.despensasSinCosto + pc.despensasApadrinadas;
-                    comunidadStats[comunidadId].totalPedidos.add(pedido.id);  // Registrar pedidos únicos
+                    comunidadStats[comunidadId].totalPedidos.add(pedido.id);
                 }
             });
         });
 
-        // Calcular promedios
         const totalPedidosCount = pedidos.length;
         const promedioGlobal = totalPedidosCount > 0 ? totalDespensas / totalPedidosCount : 0;
 
@@ -628,48 +782,62 @@ const getReporteDespensas = async (req, res) => {
                 : 0
         }));
         
-        // Formatear respuesta
+        // Incluir desgloses de devoluciones
         const response = {
             evolucionMensual: Object.entries(monthlyData)
-                .sort(([mesA], [mesB]) => { // Convertir a timestamps para comparación numérica
+                .sort(([mesA], [mesB]) => {
                     const dateA = new Date(mesA + "-01").getTime();
                     const dateB = new Date(mesB + "-01").getTime();
-                    return dateA - dateB; // Orden ascendente (más antiguo primero)
+                    return dateA - dateB;
                 })
                 .map(([mes, data]) => ({ mes, ...data })),
             resumenTipos: tiposDespensas,
             tendenciaDevoluciones: {
                 mensual: Object.entries(devolucionesPorMes)
-                    .sort(([mesA], [mesB]) => { // Convertir a timestamps para comparación numérica
+                    .sort(([mesA], [mesB]) => {
                         const dateA = new Date(mesA + "-01").getTime();
                         const dateB = new Date(mesB + "-01").getTime();
-                        return dateA - dateB; // Orden ascendente (más antiguo primero)
+                        return dateA - dateB;
                     })
-                    .map(([mes, total]) => ({ mes, total })),
+                    .map(([mes, total]) => ({
+                        mes,
+                        total,
+                        desglose: devolucionesPorMesDesglosadas[mes] || null
+                    })),
                 
                 porRuta: Object.entries(devolucionesPorRuta)
-                    .sort(([_, a], [__, b]) => b - a) // Mayor a menor
-                    .map(([ruta, total]) => ({ ruta, total }))
+                    .sort(([_, a], [__, b]) => b - a)
+                    .map(([ruta, total]) => ({
+                        ruta,
+                        total,
+                        desglose: devolucionesPorRutaDesglosadas[ruta] || null
+                    }))
             },
             promedios: {
                 global: promedioGlobal,
                 porRuta: promediosPorRuta,
                 porComunidad: promediosPorComunidad
             },
-            tablaDetallada: pedidos.slice(0, parseInt(limit)).map(p => ({
-                id: p.id,
-                fecha: p.fechaEntrega,
-                estado: p.estado,
-                ruta: p.ruta?.nombre,
-                ts: p.usuario?.username,
-                comunidades: p.pedidoComunidad.map(pc => pc.comunidad?.nombre).filter(n => n).join(", "),
-                despensasCosto: p.pedidoComunidad.reduce((acc, pc) => acc + pc.despensasCosto, 0),
-                despensasMedioCosto: p.pedidoComunidad.reduce((acc, pc) => acc + pc.despensasMedioCosto, 0),
-                despensasSinCosto: p.pedidoComunidad.reduce((acc, pc) => acc + pc.despensasSinCosto, 0),
-                despensasApadrinadas: p.pedidoComunidad.reduce((acc, pc) => acc + pc.despensasApadrinadas, 0),
-                totalDespensas: p.pedidoComunidad.reduce((acc, pc) => acc + pc.despensasCosto + pc.despensasMedioCosto + pc.despensasSinCosto + pc.despensasApadrinadas, 0),
-                devoluciones: p.devoluciones
-            }))
+            tablaDetallada: pedidos.slice(0, parseInt(limit)).map(p => {
+                const devolucionesTotales = calcularDevolucionesTotales(p);
+                const desglose = obtenerDevolucionesDesglosadas(p);
+                
+                return {
+                    id: p.id,
+                    fecha: p.fechaEntrega,
+                    estado: p.estado,
+                    ruta: p.ruta?.nombre,
+                    ts: p.usuario?.username,
+                    comunidades: p.pedidoComunidad.map(pc => pc.comunidad?.nombre).filter(n => n).join(", "),
+                    despensasCosto: p.pedidoComunidad.reduce((acc, pc) => acc + pc.despensasCosto, 0),
+                    despensasMedioCosto: p.pedidoComunidad.reduce((acc, pc) => acc + pc.despensasMedioCosto, 0),
+                    despensasSinCosto: p.pedidoComunidad.reduce((acc, pc) => acc + pc.despensasSinCosto, 0),
+                    despensasApadrinadas: p.pedidoComunidad.reduce((acc, pc) => acc + pc.despensasApadrinadas, 0),
+                    totalDespensas: p.pedidoComunidad.reduce((acc, pc) => acc + pc.despensasCosto + pc.despensasMedioCosto + pc.despensasSinCosto + pc.despensasApadrinadas, 0),
+                    devoluciones: devolucionesTotales,
+                    devolucionesDesglose: desglose
+                };
+            })
         };
         
         sendSuccessResponse(res, 200, response);
@@ -684,28 +852,25 @@ const getReporteComunidades = async (req, res) => {
     try {
         const { view, year, month, comunidadId } = req.query;
         
-        // Validar parámetros
-        if (!view || (view !== 'anual' && view !== 'mensual')) 
+        if (!view || (view !== "anual" && view !== "mensual")) 
             return sendErrorResponse(res, 400, "Parámetro 'view' inválido. Debe ser 'anual' o 'mensual'");
         
         if (!year) 
             return sendErrorResponse(res, 400, "Parámetro 'year' requerido");
         
-        if (view === 'mensual' && !month) 
+        if (view === "mensual" && !month) 
             return sendErrorResponse(res, 400, "Parámetro 'month' requerido para vista mensual");
 
-        // Calcular rangos de fechas según la vista
         let startDate, endDate;
-        if (view === 'anual') {
-            startDate = new Date(year, 0, 1); // 1 de Enero del año
-            endDate = new Date(year, 11, 31); // 31 de Diciembre del año
-        } else { // mensual
-            const monthIndex = parseInt(month) - 1; // Los meses en JS son 0-indexed
+        if (view === "anual") {
+            startDate = new Date(year, 0, 1);
+            endDate = new Date(year, 11, 31);
+        } else {
+            const monthIndex = parseInt(month) - 1;
             startDate = new Date(year, monthIndex, 1);
-            endDate = new Date(year, monthIndex + 1, 0); // Último día del mes
+            endDate = new Date(year, monthIndex + 1, 0);
         }
 
-        // 1. Datos principales de todas las comunidades
         const comunidades = await Comunidad.findAll({
             attributes: [
                 "id",
@@ -738,7 +903,7 @@ const getReporteComunidades = async (req, res) => {
                         model: Pedido,
                         as: "pedido",
                         attributes: [],
-                        where: {  // <- Filtro por año
+                        where: {
                             fechaEntrega: { 
                                 [Op.between]: [startDate, endDate] 
                             }
@@ -750,7 +915,6 @@ const getReporteComunidades = async (req, res) => {
             raw: true
         });
 
-        // Procesar datos base
         const procesado = comunidades.map(c => {
             const totalDespensas = 
                 (Number(c.totalCosto) || 0) +
@@ -773,18 +937,15 @@ const getReporteComunidades = async (req, res) => {
             };
         });
 
-        // 2. Top comunidades
         const topPedidos = [...procesado].sort((a, b) => b.totalPedidos - a.totalPedidos).slice(0, 5);
         const topDespensas = [...procesado].sort((a, b) => b.totalDespensas - a.totalDespensas).slice(0, 5);
 
-        // 3. Datos para el mapa
         const mapaVolumen = procesado.map(c => ({
             comunidad: c.nombre,
             municipio: c.municipio,
             totalDespensas: c.totalDespensas
         }));
 
-        // 4. Evolución mensual si se especifica comunidad
         let evolucion = [];
         if (comunidadId) {
             const datosEvolucion = await PedidoComunidad.findAll({
@@ -805,7 +966,7 @@ const getReporteComunidades = async (req, res) => {
                 where: { 
                     idComunidad: comunidadId,
                     fechaEntrega: { 
-                        [Op.between]: [startDate, endDate] // Filtro por año
+                        [Op.between]: [startDate, endDate]
                     }
                 },
                 group: [Sequelize.fn("date_trunc", "month", Sequelize.col("pedido.fechaEntrega"))],
@@ -830,7 +991,6 @@ const getReporteComunidades = async (req, res) => {
             }));
         }
 
-        // 5. Construir respuesta final
         const response = {
             topComunidadesPedidos: topPedidos,
             topComunidadesDespensas: topDespensas,
@@ -851,25 +1011,23 @@ const getReporteApadrinadas = async (req, res) => {
     try {
         const { view, year, month, limit = 5 } = req.query;
         
-        // Validar parámetros
-        if (!view || (view !== 'anual' && view !== 'mensual')) 
-            return sendErrorResponse(res, 400, "Parámetro 'view' inválido. Debe ser 'anual' o 'mensual'");
+        if (!view || (view !== "anual" && view !== "mensual")) 
+            return sendErrorResponse(res, 400, "Parámetro inválido. Debe ser 'anual' o 'mensual'");
         
         if (!year) 
             return sendErrorResponse(res, 400, "Parámetro 'year' requerido");
         
-        if (view === 'mensual' && !month) 
+        if (view === "mensual" && !month) 
             return sendErrorResponse(res, 400, "Parámetro 'month' requerido para vista mensual");
 
-        // Calcular rangos de fechas según la vista
         let startDate, endDate;
-        if (view === 'anual') {
-            startDate = new Date(year, 0, 1); // 1 de Enero del año
-            endDate = new Date(year, 11, 31); // 31 de Diciembre del año
-        } else { // mensual
-            const monthIndex = parseInt(month) - 1; // Los meses en JS son 0-indexed
+        if (view === "anual") {
+            startDate = new Date(year, 0, 1);
+            endDate = new Date(year, 11, 31);
+        } else {
+            const monthIndex = parseInt(month) - 1;
             startDate = new Date(year, monthIndex, 1);
-            endDate = new Date(year, monthIndex + 1, 0); // Último día del mes
+            endDate = new Date(year, monthIndex + 1, 0);
         }
 
         const monthlyData = await PedidoComunidad.findAll({
@@ -886,25 +1044,24 @@ const getReporteApadrinadas = async (req, res) => {
                 attributes: [],
                 where: { 
                     fechaEntrega: { 
-                        [Op.between]: [startDate, endDate] // Filtra solo el año actual
+                        [Op.between]: [startDate, endDate]
                     } 
                 },
                 required: true
             }],
-            group: [Sequelize.fn("DATE_FORMAT", Sequelize.col("pedido.fechaEntrega"), "%Y-%m")], // Agrupa por mes
+            group: [Sequelize.fn("DATE_FORMAT", Sequelize.col("pedido.fechaEntrega"), "%Y-%m")],
             raw: true
         });
         
-        const start = new Date(startDate).toISOString().slice(0, 19).replace('T', ' ');
-        const end = new Date(endDate).toISOString().slice(0, 19).replace('T', ' ');
+        const start = new Date(startDate).toISOString().slice(0, 19).replace("T", " ");
+        const end = new Date(endDate).toISOString().slice(0, 19).replace("T", " ");
 
-        // 2. Top TS y Comunidades en una sola consulta usando Promise.all
         const [topTS, topComunidades] = await Promise.all([
             Usuario.findAll({
                 attributes: [
                     "id",
                     "username",
-                    [Sequelize.literal(`( SELECT SUM(despensasApadrinadas) FROM pedidoComunidad JOIN pedidos ON pedidoComunidad.idPedido = pedidos.id WHERE pedidos.idTs = usuarios.id AND pedidos.fechaEntrega BETWEEN '${start}' AND '${end}')`), "total"]
+                    [Sequelize.literal(`( SELECT SUM(despensasApadrinadas) FROM pedidoComunidad JOIN pedidos ON pedidoComunidad.idPedido = pedidos.id WHERE pedidos.idTs = usuarios.id AND pedidos.fechaEntrega BETWEEN "${start}" AND "${end}")`), "total"]
                 ],
                 order: [[Sequelize.literal("total"), "DESC"]],
                 limit: parseInt(limit),
@@ -914,7 +1071,7 @@ const getReporteApadrinadas = async (req, res) => {
                 attributes: [
                     "id",
                     "nombre",
-                    [Sequelize.literal(`(SELECT SUM(despensasApadrinadas) FROM pedidoComunidad JOIN pedidos ON pedidoComunidad.idPedido = pedidos.id WHERE pedidoComunidad.idComunidad = comunidades.id AND pedidos.fechaEntrega BETWEEN '${start}' AND '${end}')`), "total"]
+                    [Sequelize.literal(`(SELECT SUM(despensasApadrinadas) FROM pedidoComunidad JOIN pedidos ON pedidoComunidad.idPedido = pedidos.id WHERE pedidoComunidad.idComunidad = comunidades.id AND pedidos.fechaEntrega BETWEEN "${start}" AND "${end}")`), "total"]
                 ],
                 include: [
                     { model: Municipio, as: "municipio", attributes: ["nombre"] }
@@ -925,7 +1082,6 @@ const getReporteApadrinadas = async (req, res) => {
             })
         ]);
 
-        // 3. Pedidos apadrinados con paginación
         const pedidosApadrinados = await Pedido.findAll({
             include: [{
                 model: PedidoComunidad,
@@ -948,14 +1104,13 @@ const getReporteApadrinadas = async (req, res) => {
             }],
             where: {
                 fechaEntrega: {
-                    [Op.between]: [startDate, endDate] // Filtra solo el año actual
+                    [Op.between]: [startDate, endDate]
                 }
             },
             order: [["fechaEntrega", "DESC"]],
             limit: parseInt(limit)
         });
 
-        // 4. Procesamiento eficiente de datos
         const totalGlobal = monthlyData.reduce((acc, mes) => ({
             costo: acc.costo + Number(mes.costo),
             medioCosto: acc.medioCosto + Number(mes.medioCosto),
@@ -1001,25 +1156,24 @@ const getReporteEconomico = async (req, res) => {
     try {
         const { view, year, month, comunidadId, municipioId, rutaId, tsId } = req.query;
         
-        // Validar parámetros
-        if (!view || (view !== 'anual' && view !== 'mensual')) 
+        if (!view || (view !== "anual" && view !== "mensual")) 
             return sendErrorResponse(res, 400, "Parámetro 'view' inválido. Debe ser 'anual' o 'mensual'");
         
         if (!year) 
             return sendErrorResponse(res, 400, "Parámetro 'year' requerido");
         
-        if (view === 'mensual' && !month) 
+        if (view === "mensual" && !month) 
             return sendErrorResponse(res, 400, "Parámetro 'month' requerido para vista mensual");
 
         // Calcular rangos de fechas según la vista
         let startDate, endDate;
-        if (view === 'anual') {
-            startDate = new Date(year, 0, 1); // 1 de Enero del año
-            endDate = new Date(year, 11, 31); // 31 de Diciembre del año
-        } else { // mensual
-            const monthIndex = parseInt(month) - 1; // Los meses en JS son 0-indexed
+        if (view === "anual") {
+            startDate = new Date(year, 0, 1);
+            endDate = new Date(year, 11, 31);
+        } else {
+            const monthIndex = parseInt(month) - 1;
             startDate = new Date(year, monthIndex, 1);
-            endDate = new Date(year, monthIndex + 1, 0); // Último día del mes
+            endDate = new Date(year, monthIndex + 1, 0);
         }
 
         // Obtener todos los pedidosComunidad con relaciones necesarias
@@ -1030,7 +1184,7 @@ const getReporteEconomico = async (req, res) => {
                     as: "pedido",
                     where: {
                         fechaEntrega: {
-                            [Op.between]: [startDate, endDate] // Filtra solo el año actual
+                            [Op.between]: [startDate, endDate]
                         }
                     },
                     required: true,
@@ -1066,14 +1220,14 @@ const getReporteEconomico = async (req, res) => {
                 ingresosRecaudados: 0,
                 despensasSubsidiadas: 0,
                 balanceNeto: 0,
-                totalDespensasEntregadas: 0, // Nuevo campo: total de despensas
+                totalDespensasEntregadas: 0,
                 detalle: {
                     costoCompleto: 0,
                     medioCosto: 0,
                     sinCosto: 0,
                     apadrinadas: 0
                 },
-                detalleConteo: { // Nuevo desglose por tipo (conteo)
+                detalleConteo: {
                     costoCompleto: 0,
                     medioCosto: 0,
                     sinCosto: 0,
@@ -1265,19 +1419,18 @@ const getReporteEconomico = async (req, res) => {
 
 const getCalendario = async (req, res) => {
     try {
-        // 1. Manejar filtros de fecha (año o todos)
         const { year } = req.query;
         let whereClause = {};
 
         if (year) {
-            const inicioYear = new Date(year, 0, 1); // 1 de Enero del año
-            const finYear = new Date(year, 11, 31); // 31 de Diciembre del año
+            const inicioYear = new Date(year, 0, 1);
+            const finYear = new Date(year, 11, 31);
             whereClause.fechaEntrega = { [Op.between]: [inicioYear, finYear] };
-        } // Si no hay year, se trae todo el historial
+        }
 
-        // 2. Consulta principal con total de despensas
+        // Incluir campos de devoluciones
         const calendario = await Pedido.findAll({
-            attributes: ["fechaEntrega", "estado", "id"],
+            attributes: [ "fechaEntrega", "estado", "id", "devoluciones", "devolucionesCosto", "devolucionesMedioCosto", "devolucionesSinCosto", "devolucionesApadrinadas" ],
             include: [
                 {
                     model: Ruta,
@@ -1293,7 +1446,7 @@ const getCalendario = async (req, res) => {
             where: whereClause
         });
 
-        // 3. Calcular total de despensas por pedido
+        // Incluir devoluciones híbridas
         const calendarioFormateado = calendario.map(pedido => {
             const totalDespensas = pedido.pedidoComunidad
                 ?.reduce((total, pc) => {
@@ -1302,14 +1455,19 @@ const getCalendario = async (req, res) => {
                            pc.despensasMedioCosto +
                            pc.despensasSinCosto +
                            pc.despensasApadrinadas;
-                }, 0) || 0; // Manejo seguro si no hay despensas
+                }, 0) || 0;
+
+            const devolucionesTotales = calcularDevolucionesTotales(pedido);
+            const desglose = obtenerDevolucionesDesglosadas(pedido);
 
             return {
                 id: pedido.id,
                 fecha: pedido.fechaEntrega,
                 estado: pedido.estado,
                 ruta: pedido.ruta?.nombre || "Sin ruta",
-                totalDespensas: totalDespensas
+                totalDespensas: totalDespensas,
+                devoluciones: devolucionesTotales,
+                devolucionesDesglose: desglose
             };
         });
 
