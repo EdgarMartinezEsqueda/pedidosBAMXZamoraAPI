@@ -57,6 +57,10 @@ CREATE TABLE pedidos (
     fechaEntrega DATE NOT NULL,
     estado ENUM('pendiente', 'finalizado') DEFAULT 'pendiente',
     devoluciones INT,
+    devolucionesCosto INT DEFAULT 0,
+    devolucionesMedioCosto INT DEFAULT 0,
+    devolucionesSinCosto INT DEFAULT 0,
+    devolucionesApadrinadas INT DEFAULT 0;
     horaLlegada TIME,
     cobranzaGenerada BOOLEAN DEFAULT FALSE,
     urlCobranza VARCHAR(255),

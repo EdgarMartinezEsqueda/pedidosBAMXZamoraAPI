@@ -69,9 +69,9 @@ const getAllOrders = async (req, res) => {
         const offset = (page - 1) * pageSize;
 
         // Filtros específicos para pedidos
-        const trabajadoresFilter = req.query.trabajadores ? req.query.trabajadores.split(',') : [];
-        const rutasFilter = req.query.rutas ? req.query.rutas.split(',') : [];
-        const estatusFilter = req.query.estatus ? req.query.estatus.split(',') : [];
+        const trabajadoresFilter = req.query.trabajadores ? req.query.trabajadores.split(",") : [];
+        const rutasFilter = req.query.rutas ? req.query.rutas.split(",") : [];
+        const estatusFilter = req.query.estatus ? req.query.estatus.split(",") : [];
         const fechaInicio = req.query.fechaInicio; // Formato YYYY-MM-DD
         const fechaFin = req.query.fechaFin; // Formato YYYY-MM-DD
 
@@ -94,12 +94,12 @@ const getAllOrders = async (req, res) => {
 
         // Aplicar filtros
         if (trabajadoresFilter.length > 0) {
-            where['$usuario.username$'] = { [Op.in]: trabajadoresFilter };
+            where["$usuario.username$"] = { [Op.in]: trabajadoresFilter };
             include[0].required = true; // Hacer INNER JOIN al filtrar
         }
 
         if (rutasFilter.length > 0) {
-            where['$ruta.nombre$'] = { [Op.in]: rutasFilter };
+            where["$ruta.nombre$"] = { [Op.in]: rutasFilter };
             include[1].required = true; // Hacer INNER JOIN al filtrar
         }
 
@@ -185,7 +185,7 @@ const getOrder = async (req, res) => {
                     as: "efectivo"
                 } 
             ]
-        } );
+        });
 
         if (!pedido) 
             return sendErrorResponse(res, 404, "Order not found");
@@ -197,21 +197,26 @@ const getOrder = async (req, res) => {
         let total = 0;
         if (pedidoPlain.pedidoComunidad && pedidoPlain.pedidoComunidad.length > 0) {
             pedidoPlain.pedidoComunidad.forEach(item => {
-                const costo = item.comunidad?.costoPaquete || 100.00; // Default 100.00 si no existe
-                // Asegurar que los valores sean numéricos
+                const costo = item.comunidad?.costoPaquete || 100.00;
                 const completo = Number(item.despensasCosto) || 0;
                 const medio = Number(item.despensasMedioCosto) || 0;
                 
-                // Cálculo: completo * costo + medio * (costo / 2)
                 total += (completo * costo) + (medio * (costo / 2));
             });
         }
         
         // Redondear a 2 decimales
         total = Math.round(total * 100) / 100;
-        
-        // Agregar el total al objeto de respuesta
         pedidoPlain.total = total;
+        
+        // Indicar tipo de devoluciones para el frontend
+        const tieneDevolucionesNuevas = 
+            pedidoPlain.devolucionesCosto > 0 || 
+            pedidoPlain.devolucionesMedioCosto > 0 || 
+            pedidoPlain.devolucionesSinCosto > 0 || 
+            pedidoPlain.devolucionesApadrinadas > 0;
+        
+        pedidoPlain.tipoDevolucion = tieneDevolucionesNuevas ? "desglosado" : "legacy";
         
         return sendSuccessResponse(res, 200, pedidoPlain);
     } catch (e) {
@@ -225,7 +230,18 @@ const updateOrder = async (req, res) => {
     let transaction;
     try {
         const { id } = req.params;
-        const { fechaEntrega, devoluciones, pedidoComunidad, estado, horaLlegada, efectivo } = req.body;
+        const { 
+            fechaEntrega, 
+            devoluciones, // DEPRECATED - mantener por compatibilidad
+            devolucionesCosto,
+            devolucionesMedioCosto,
+            devolucionesSinCosto,
+            devolucionesApadrinadas,
+            pedidoComunidad, 
+            estado, 
+            horaLlegada, 
+            efectivo 
+        } = req.body;
         
         if (isNaN(id)) return sendErrorResponse(res, 400, "ID inválido");
         transaction = await sequelize.transaction();
@@ -240,12 +256,20 @@ const updateOrder = async (req, res) => {
         // Actualizar campos permitidos
         const updateFields = {};
         if (fechaEntrega) updateFields.fechaEntrega = fechaEntrega;
-        if (devoluciones !== undefined) updateFields.devoluciones = devoluciones;
-        if (horaLlegada !== undefined) updateFields.horaLlegada = horaLlegada;
+        if (horaLlegada) updateFields.horaLlegada = horaLlegada;
         if (estado) updateFields.estado = estado;
         
+        // Manejar devoluciones desglosadas
+        if (devolucionesCosto !== undefined) updateFields.devolucionesCosto = devolucionesCosto;
+        if (devolucionesMedioCosto !== undefined) updateFields.devolucionesMedioCosto = devolucionesMedioCosto;
+        if (devolucionesSinCosto !== undefined) updateFields.devolucionesSinCosto = devolucionesSinCosto;
+        if (devolucionesApadrinadas !== undefined) updateFields.devolucionesApadrinadas = devolucionesApadrinadas;
+        
+        // Mantener por compatibilidad con pedidos viejos
+        if (devoluciones !== undefined ) updateFields.devoluciones = devoluciones;
+        
         await pedido.update(updateFields, { transaction });
-
+console.log(req.body, updateFields);
         // 2. Manejar pedidoComunidad (tu lógica existente)
         if (pedidoComunidad) {
             if (!Array.isArray(pedidoComunidad)) {
@@ -386,7 +410,7 @@ const getOrdersByTs = async (req, res) => {
             order: [["id", "DESC" ]], // Obtener los pedidos mas recientes al inicio
             where: { idTs : id }
         });
-        logger.info(`Fetched ${orders.length} orders for 'My Orders' view`); // Log success
+        logger.info(`Fetched ${orders.length} orders for "My Orders" view`); // Log success
         return sendSuccessResponse(res, 200, orders);
     } catch (e) {
         logger.error(`Error fetching all orders for Route: ${req.params.ruta}\n${e.message}`); // Log error
@@ -408,8 +432,8 @@ const getAllOrdersForExport = async (req, res) => {
     const where = {};
     
     // Filtros para usuarios, rutas y estado
-    if (usuarios.length > 0) where['$usuario.username$'] = { [Op.in]: usuarios };
-    if (rutas.length > 0) where['$ruta.nombre$'] = { [Op.in]: rutas };
+    if (usuarios.length > 0) where["$usuario.username$"] = { [Op.in]: usuarios };
+    if (rutas.length > 0) where["$ruta.nombre$"] = { [Op.in]: rutas };
     if (estatusPedido.length > 0) where.estado = { [Op.in]: estatusPedido };
     
     // Manejo preciso de fechas
@@ -475,7 +499,7 @@ const updateOrderStatus = async (req, res) => {
             return sendErrorResponse(res, 404, "Pedido no encontrado");
         }
 
-        // Actualizar el estado del pedido a 'pendiente'
+        // Actualizar el estado del pedido a "pendiente"
         pedido.estado = "pendiente";
         await pedido.save();
 
